@@ -1,0 +1,84 @@
+# This file contains code for synthetic data
+
+
+
+import pandas as pd
+import numpy as np
+
+# Generate mock customer data
+np.random.seed(42)
+num_customers = 2000
+
+data = {
+    'CustomerID': [f'CUST{1000+i}' for i in range(num_customers)],
+    'Gender': np.random.choice(['Male', 'Female'], num_customers, p=[0.5, 0.5]),
+    'SeniorCitizen': np.random.choice([0, 1], num_customers, p=[0.84, 0.16]),
+    'Partner': np.random.choice(['Yes', 'No'], num_customers, p=[0.48, 0.52]),
+    'Dependents': np.random.choice(['Yes', 'No'], num_customers, p=[0.3, 0.7]),
+    'Tenure': np.random.randint(1, 73, num_customers),  # Months
+    'PhoneService': np.random.choice(['Yes', 'No'], num_customers, p=[0.9, 0.1]),
+    'MultipleLines': np.random.choice(['Yes', 'No', 'No phone service'], num_customers, p=[0.42, 0.48, 0.1]),
+    'InternetService': np.random.choice(['DSL', 'Fiber optic', 'No'], num_customers, p=[0.34, 0.44, 0.22]),
+    'OnlineSecurity': np.random.choice(['Yes', 'No', 'No internet service'], num_customers, p=[0.28, 0.50, 0.22]),
+    'OnlineBackup': np.random.choice(['Yes', 'No', 'No internet service'], num_customers, p=[0.34, 0.44, 0.22]),
+    'DeviceProtection': np.random.choice(['Yes', 'No', 'No internet service'], num_customers, p=[0.34, 0.44, 0.22]),
+    'TechSupport': np.random.choice(['Yes', 'No', 'No internet service'], num_customers, p=[0.29, 0.49, 0.22]),
+    'StreamingTV': np.random.choice(['Yes', 'No', 'No internet service'], num_customers, p=[0.38, 0.40, 0.22]),
+    'StreamingMovies': np.random.choice(['Yes', 'No', 'No internet service'], num_customers, p=[0.39, 0.39, 0.22]),
+    'Contract': np.random.choice(['Month-to-month', 'One year', 'Two year'], num_customers, p=[0.55, 0.24, 0.21]),
+    'PaperlessBilling': np.random.choice(['Yes', 'No'], num_customers, p=[0.59, 0.41]),
+    'PaymentMethod': np.random.choice(
+        ['Electronic check', 'Mailed check', 'Bank transfer (automatic)', 'Credit card (automatic)'],
+        num_customers, p=[0.34, 0.23, 0.22, 0.21]),
+    'MonthlyCharges': np.random.normal(loc=65, scale=30, size=num_customers).clip(18, 120).round(2),
+}
+
+df_customers = pd.DataFrame(data)
+
+# Generate TotalCharges based on Tenure and MonthlyCharges with some noise
+df_customers['TotalCharges'] = (df_customers['Tenure'] * df_customers['MonthlyCharges'] *
+                                np.random.uniform(0.95, 1.05, num_customers)).round(2)
+
+# Set TotalCharges to MonthlyCharges for new customers with tenure = 1
+df_customers.loc[df_customers['Tenure'] == 1, 'TotalCharges'] = df_customers['MonthlyCharges']
+
+# Randomly set some TotalCharges to NaN for realism (new/short-tenure customers)
+low_tenure_indices = df_customers[df_customers['Tenure'] < 3].sample(frac=0.01, random_state=42).index
+df_customers.loc[low_tenure_indices, 'TotalCharges'] = np.nan
+
+# Simulate Churn (more likely for month-to-month, higher charges, lower tenure)
+churn_probability = (
+    0.1
+    + 0.15 * (df_customers['Contract'] == 'Month-to-month')
+    + 0.1 * (df_customers['InternetService'] == 'Fiber optic')
+    + 0.001 * (df_customers['MonthlyCharges'] - 65)
+    - 0.002 * (df_customers['Tenure'] - 36)
+    + 0.1 * (df_customers['OnlineSecurity'] == 'No')
+    + 0.1 * (df_customers['TechSupport'] == 'No')
+)
+
+churn_probability = np.clip(churn_probability, 0.01, 0.99)
+df_customers['Churn'] = np.random.binomial(1, churn_probability, num_customers).astype(str)
+df_customers['Churn'] = df_customers['Churn'].replace({'1': 'Yes', '0': 'No'})
+
+# Replace "No phone service" and "No internet service" for consistency
+for col in ['MultipleLines']:
+    df_customers[col] = df_customers.apply(lambda row: 'No' if row['PhoneService'] == 'No' else row[col], axis=1)
+
+for col in ['OnlineSecurity', 'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies']:
+    df_customers[col] = df_customers.apply(lambda row: 'No' if row['InternetService'] == 'No' else row[col], axis=1)
+
+# Done! You now have a realistic synthetic telecom customer churn dataset
+print(df_customers.head())
+
+# Save the DataFrame to a CSV file
+# df_customers.to_csv('telecom_churn_mock_data.csv', index=False)
+
+# Confirm the file was generated
+# print("Mock telecom churn data generated: telecom_churn_mock_data.csv")
+
+# Display the first few rows of the dataset
+# print(df_customers.head())
+
+# Show the churn rate distribution in percentages
+# print(f"\nChurn distribution:\n{df_customers['Churn'].value_counts(normalize=True)}")
